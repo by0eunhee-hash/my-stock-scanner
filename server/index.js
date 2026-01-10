@@ -2,18 +2,15 @@ require("dotenv").config();
 const axios = require("axios");
 const express = require("express");
 const cors = require("cors");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 
 const app = express();
 app.use(cors());
 app.use(express.json()); // 💡 JSON 파싱을 위해 꼭 필요합니다!
 
-const { KIS_APPKEY, KIS_SECRET, KIS_URL, GEMINI_API_KEY } = process.env;
-const KIS_USERID = "ans1059";
+const { KIS_APPKEY, KIS_SECRET, KIS_URL, KIS_USERID, GEMINI_API_KEY } =
+  process.env;
 let accessToken = "";
-
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 const getAccessToken = async () => {
   try {
@@ -28,6 +25,8 @@ const getAccessToken = async () => {
     console.error("❌ 초기화 실패");
   }
 };
+
+const genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 // 1. 조건식 목록 조회
 app.get("/condition-list", async (req, res) => {
@@ -101,19 +100,25 @@ app.get("/condition-stocks/:seq", async (req, res) => {
   }
 });
 
-// 3. 💡 AI 다중 종목 분석 기능 (프론트엔드와 규격 맞춤)
-app.post("/ai-analyze", async (req, res) => {
+app.post("/gemini", async (req, res) => {
   try {
-    const { stockList } = req.body; // 프론트에서 보낸 리스트 받기
-    const prompt = `다음은 현재 급등/검색된 종목 리스트입니다: ${stockList.join(
-      ", "
-    )}. 
-    이 종목들의 전체적인 시장 테마를 분석하고 투자 시 유의점을 짧은 3줄 요약해줘.`;
+    const { prompt } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt is required" });
+    }
 
-    const result = await model.generateContent(prompt);
-    res.json({ analysis: result.response.text() });
+    const response = await genAI.models.generateContent({
+      // model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
+    const text = response.text;
+    console.log(text);
+
+    res.json({ response: text });
   } catch (e) {
-    res.status(500).json({ analysis: "AI 분석 실패" });
+    console.error("❌ [Gemini] 호출 실패", e);
+    res.status(500).json({ error: "Failed to generate response" });
   }
 });
 

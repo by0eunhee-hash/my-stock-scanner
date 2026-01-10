@@ -39,23 +39,36 @@ function App() {
     setLoading(false);
   };
 
-  // 4. Gemini AI 분석 함수
+  // Gemini 분석 요청
   const analyzeWithGemini = async () => {
-    if (stocks.length === 0) return;
+    if (filteredStocks.length === 0) return;
+
     setGeminiLoading(true);
+
+    const stockNames = filteredStocks.map((s) => s.name).join(", ");
+
+    console.log(stockNames);
+
+    const prompt = `다음 주식 종목들에 대해 오늘 차트를 분석해서 추천 종목 3개를 거래량,오늘 저점, 오늘 고점, 차트 흐름은 표로 예쁘게 만들고 모든 내용은 html형식으로 div가 최상위로 만들어줘. 특수 기호는 넣지마.: ${stockNames}`;
     try {
-      const res = await fetch("http://localhost:4000/ai-analyze", {
+      const res = await fetch("http://localhost:4000/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stockList: stocks.slice(0, 5).map((s) => `${s.name}(${s.chrate}%)`),
-        }),
+        body: JSON.stringify({ prompt }),
       });
       const data = await res.json();
-      setPopupMessage(data.analysis.replace(/\n/g, "<br/>"));
+      const rawResponse = data.response || "응답을 받지 못했습니다.";
+
+      // ```html ... ``` 제거하고 HTML 추출
+      const htmlMatch = rawResponse.match(/```html\s*(.*?)\s*```/s);
+      const response = htmlMatch ? htmlMatch[1] : rawResponse;
+
+      setPopupMessage(response);
       setShowPopup(true);
     } catch (e) {
-      alert("AI 분석 중 오류가 발생했습니다.");
+      console.error("Gemini 호출 실패", e);
+      setPopupMessage("Gemini 호출에 실패했습니다.");
+      setShowPopup(true);
     }
     setGeminiLoading(false);
   };
@@ -329,7 +342,7 @@ const styles = {
     backgroundColor: "#fff",
     padding: "30px",
     borderRadius: "20px",
-    maxWidth: "500px",
+    maxWidth: "85%",
     width: "90%",
     boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
   },
@@ -338,6 +351,12 @@ const styles = {
     fontSize: "14px",
     color: "#34495e",
     marginBottom: "20px",
+    maxHeight: "500px",
+    overflowY: "auto",
+    border: "1px solid #ddd",
+    padding: "10px",
+    borderRadius: "5px",
+    backgroundColor: "#f9f9f9",
   },
   closeBtn: {
     width: "100%",
