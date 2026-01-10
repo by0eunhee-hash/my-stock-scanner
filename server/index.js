@@ -2,12 +2,15 @@ require("dotenv").config();
 const axios = require("axios");
 const express = require("express");
 const cors = require("cors");
-
+const { GoogleGenAI } = require("@google/genai");
+const fs = require("fs");
+const path = require("path");
 const app = express();
 app.use(cors());
+app.use(express.json()); // JSON 파싱을 위해 추가
 
-const { KIS_APPKEY, KIS_SECRET, KIS_URL } = process.env;
-const KIS_USERID = "ans1059";
+const { KIS_APPKEY, KIS_SECRET, KIS_URL, KIS_USERID, GEMINI_API_KEY } =
+  process.env;
 let accessToken = "";
 
 const getAccessToken = async () => {
@@ -23,6 +26,8 @@ const getAccessToken = async () => {
     console.error("❌ [KIS] 인증 실패");
   }
 };
+
+const genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 app.get("/condition-list", async (req, res) => {
   try {
@@ -114,6 +119,43 @@ app.get("/condition-stocks/:seq", async (req, res) => {
   } catch (e) {
     res.status(500).json([]);
   }
+});
+
+app.post("/gemini", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt is required" });
+    }
+
+    const response = await genAI.models.generateContent({
+      // model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
+    const text = response.text;
+    console.log(text);
+
+    res.json({ response: text });
+  } catch (e) {
+    console.error("❌ [Gemini] 호출 실패", e);
+    res.status(500).json({ error: "Failed to generate response" });
+  }
+});
+
+app.post("/save-result", (req, res) => {
+  const { htmlContent } = req.body;
+  if (!htmlContent) {
+    return res.status(400).json({ error: "HTML content is required" });
+  }
+  const filePath = path.join(__dirname, "ttt.html");
+  fs.writeFile(filePath, htmlContent, (err) => {
+    if (err) {
+      console.error("파일 저장 실패", err);
+      return res.status(500).json({ error: "Failed to save file" });
+    }
+    res.json({ message: "File saved successfully" });
+  });
 });
 
 const PORT = 4000;

@@ -9,6 +9,10 @@ function App() {
   const [sortBy, setSortBy] = useState("chrate"); // 정렬 기준
   const [selectedCategory, setSelectedCategory] = useState("전체"); // 업종 필터
 
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupMessage, setPopupMessage] = useState("");
+  const [geminiLoading, setGeminiLoading] = useState(false);
+
   // 1. 페이지 로드 시 조건 목록 가져오기
   useEffect(() => {
     fetch("http://localhost:4000/condition-list")
@@ -30,6 +34,35 @@ function App() {
       console.error("종목 로드 실패");
     }
     setLoading(false);
+  };
+
+  // Gemini 분석 요청
+  const analyzeWithGemini = async () => {
+    if (processedStocks.length === 0) return;
+    setGeminiLoading(true);
+    const stockNames = processedStocks.map((s) => s.name).join(", ");
+    const prompt = `다음 주식 종목들에 대해 오늘 차트를 분석해서 추천 종목 3개를 거래량,오늘 저점, 오늘 고점, 차트 흐름은 표로 예쁘게 만들고 모든 내용은 html형식으로 div가 최상위로 만들어줘. 특수 기호는 다 빼: ${stockNames}`;
+    try {
+      const res = await fetch("http://localhost:4000/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await res.json();
+      const rawResponse = data.response || "응답을 받지 못했습니다.";
+
+      // ```html ... ``` 제거하고 HTML 추출
+      const htmlMatch = rawResponse.match(/```html\s*(.*?)\s*```/s);
+      const response = htmlMatch ? htmlMatch[1] : rawResponse;
+
+      setPopupMessage(response);
+      setShowPopup(true);
+    } catch (e) {
+      console.error("Gemini 호출 실패", e);
+      setPopupMessage("Gemini 호출에 실패했습니다.");
+      setShowPopup(true);
+    }
+    setGeminiLoading(false);
   };
 
   // 3. 업종 리스트 추출 (데이터에서 중복 제거하여 자동 생성)
@@ -58,6 +91,7 @@ function App() {
           <span style={styles.filterLabel}>정렬:</span>
           {["name", "chrate", "volume"].map((type) => (
             <button
+              type="button"
               key={type}
               onClick={() => setSortBy(type)}
               style={{
@@ -72,6 +106,19 @@ function App() {
                 : "거래량순"}
             </button>
           ))}
+          {stocks.length > 0 && (
+            <button
+              type="button"
+              onClick={analyzeWithGemini}
+              disabled={geminiLoading}
+              style={{
+                ...styles.geminiBtn,
+                backgroundColor: geminiLoading ? "#ccc" : "#28a745",
+              }}
+            >
+              {geminiLoading ? "분석 중..." : "🤖 Gemini 분석"}
+            </button>
+          )}
         </div>
       </header>
 
@@ -79,6 +126,7 @@ function App() {
       <div style={styles.buttonGrid}>
         {conditions.map((c) => (
           <button
+            type="button"
             key={c.id}
             onClick={() => fetchStocks(c.id, c.name)}
             style={{
@@ -102,6 +150,7 @@ function App() {
         <div style={styles.tabContainer}>
           {categories.map((cat) => (
             <button
+              type="button"
               key={cat}
               onClick={() => setSelectedCategory(cat)}
               style={{
@@ -157,6 +206,26 @@ function App() {
           );
         })}
       </div>
+
+      {/* 팝업 */}
+      {showPopup && (
+        <div style={styles.popup}>
+          <div style={styles.popupContent}>
+            <h4>🤖 Gemini 분석 결과</h4>
+            <div
+              style={styles.popupText}
+              dangerouslySetInnerHTML={{ __html: popupMessage }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPopup(false)}
+              style={styles.confirmBtn}
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -182,6 +251,16 @@ const styles = {
     cursor: "pointer",
     fontWeight: "bold",
     fontSize: "13px",
+  },
+  geminiBtn: {
+    padding: "8px 16px",
+    borderRadius: "8px",
+    border: "none",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: "bold",
+    fontSize: "13px",
+    marginLeft: "10px",
   },
   buttonGrid: {
     display: "flex",
@@ -262,6 +341,43 @@ const styles = {
     color: "#95a5a6",
     borderTop: "1px solid #f9f9f9",
     paddingTop: "8px",
+  },
+  popup: {
+    position: "fixed",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  popupContent: {
+    backgroundColor: "#fff",
+    padding: "20px",
+    borderRadius: "15px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+    maxWidth: "85%",
+    width: "90%",
+    textAlign: "center",
+    maxHeight: "800px",
+    overflowY: "auto",
+  },
+  popupText: {
+    marginBottom: "20px",
+    textAlign: "left",
+  },
+  confirmBtn: {
+    padding: "10px 20px",
+    borderRadius: "8px",
+    border: "none",
+    backgroundColor: "#3498db",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: "bold",
   },
 };
 
