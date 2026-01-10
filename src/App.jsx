@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
 
 function App() {
-  const [conditions, setConditions] = useState([]);
-  const [stocks, setStocks] = useState([]);
-  const [selectedName, setSelectedName] = useState("");
+  const [conditions, setConditions] = useState([]); // 조건식 목록
+  const [stocks, setStocks] = useState([]); // 검색된 종목들
+  const [selectedName, setSelectedName] = useState(""); // 현재 선택된 조건명
   const [loading, setLoading] = useState(false);
-  // 💡 정렬 상태 추가 (기본값: 등락률순)
-  const [sortBy, setSortBy] = useState("chrate");
 
+  const [sortBy, setSortBy] = useState("chrate"); // 정렬 기준
+  const [selectedCategory, setSelectedCategory] = useState("전체"); // 업종 필터
+
+  // 1. 페이지 로드 시 조건 목록 가져오기
   useEffect(() => {
     fetch("http://localhost:4000/condition-list")
       .then((res) => res.json())
@@ -15,9 +17,11 @@ function App() {
       .catch((err) => console.error("목록 로드 실패"));
   }, []);
 
+  // 2. 조건 클릭 시 종목 데이터 요청
   const fetchStocks = async (seq, name) => {
     setLoading(true);
     setSelectedName(name);
+    setSelectedCategory("전체"); // 새로운 조건 클릭 시 필터 초기화
     try {
       const res = await fetch(`http://localhost:4000/condition-stocks/${seq}`);
       const data = await res.json();
@@ -28,55 +32,50 @@ function App() {
     setLoading(false);
   };
 
-  // 💡 실시간 정렬 로직: stocks 데이터가 변하거나 정렬 기준이 바뀔 때 자동 실행
-  const sortedStocks = [...stocks].sort((a, b) => {
-    if (sortBy === "name") {
-      return a.name.localeCompare(b.name); // 이름순 (가나다)
-    } else if (sortBy === "chrate") {
-      return parseFloat(b.chrate) - parseFloat(a.chrate); // 등락률순 (높은순)
-    } else if (sortBy === "volume") {
-      return parseInt(b.volume) - parseInt(a.volume); // 거래량순 (많은순)
-    }
-    return 0;
-  });
+  // 3. 업종 리스트 추출 (데이터에서 중복 제거하여 자동 생성)
+  const rawCategories = [...new Set(stocks.map((s) => s.category))];
+  const categories = [
+    "전체",
+    ...rawCategories.filter((c) => c !== "전체").sort(),
+  ];
+
+  // 필터링 및 정렬
+  const processedStocks = stocks
+    .filter(
+      (s) => selectedCategory === "전체" || s.category === selectedCategory
+    )
+    .sort((a, b) => {
+      if (sortBy === "chrate")
+        return parseFloat(b.chrate) - parseFloat(a.chrate);
+      return 0; // 등락률순 기본 정렬
+    });
 
   return (
     <div style={styles.container}>
       <header style={styles.header}>
         <h1 style={styles.logo}>🛡️ REAL-TIME WATCHER</h1>
-        {/* 💡 정렬 필터 바 추가 */}
         <div style={styles.filterBar}>
-          <span style={styles.filterLabel}>정렬 기준:</span>
-          <button
-            onClick={() => setSortBy("name")}
-            style={{
-              ...styles.filterBtn,
-              color: sortBy === "name" ? "#3498db" : "#95a5a6",
-            }}
-          >
-            이름순
-          </button>
-          <button
-            onClick={() => setSortBy("chrate")}
-            style={{
-              ...styles.filterBtn,
-              color: sortBy === "chrate" ? "#3498db" : "#95a5a6",
-            }}
-          >
-            등락률순
-          </button>
-          <button
-            onClick={() => setSortBy("volume")}
-            style={{
-              ...styles.filterBtn,
-              color: sortBy === "volume" ? "#3498db" : "#95a5a6",
-            }}
-          >
-            거래량순
-          </button>
+          <span style={styles.filterLabel}>정렬:</span>
+          {["name", "chrate", "volume"].map((type) => (
+            <button
+              key={type}
+              onClick={() => setSortBy(type)}
+              style={{
+                ...styles.filterBtn,
+                color: sortBy === type ? "#3498db" : "#95a5a6",
+              }}
+            >
+              {type === "name"
+                ? "이름순"
+                : type === "chrate"
+                ? "등락률순"
+                : "거래량순"}
+            </button>
+          ))}
         </div>
       </header>
 
+      {/* 조건식 버튼 목록 */}
       <div style={styles.buttonGrid}>
         {conditions.map((c) => (
           <button
@@ -96,43 +95,63 @@ function App() {
         ))}
       </div>
 
+      <hr style={styles.divider} />
+
+      {/* 💡 업종별 탭 메뉴 */}
+      {stocks.length > 0 && (
+        <div style={styles.tabContainer}>
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              style={{
+                ...styles.tabBtn,
+                backgroundColor:
+                  selectedCategory === cat ? "#3498db" : "transparent",
+                color: selectedCategory === cat ? "#fff" : "#7f8c8d",
+                border:
+                  selectedCategory === cat
+                    ? "1px solid #3498db"
+                    : "1px solid #ddd",
+              }}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+
       <h2 style={styles.subTitle}>
         {selectedName
-          ? `🎯 ${selectedName} (${stocks.length}개)`
+          ? `🎯 ${selectedName} (${processedStocks.length}개)`
           : "조건을 선택해주세요"}
       </h2>
 
+      {/* 종목 카드 그리드 */}
       <div style={styles.grid}>
-        {sortedStocks.map((s, idx) => {
-          // 💡 해결 1: 등락률 데이터(s.chrate)가 있는지 확인하고 숫자로 변환
+        {processedStocks.map((s, idx) => {
           const rate = parseFloat(s.chrate || 0);
           const isUp = rate > 0;
-          const isDown = rate < 0;
-
           return (
             <div key={idx} style={styles.card}>
               <div style={styles.cardHeader}>
+                <span style={styles.categoryBadge}>{s.category || "기타"}</span>
                 <span style={styles.codeLabel}>{s.code}</span>
-                <span style={styles.stockName}>{s.name}</span>
               </div>
-
+              <div style={styles.stockName}>{s.name}</div>
               <div style={styles.priceStyle}>
                 {parseInt(s.price || 0).toLocaleString()}원
               </div>
-
-              {/* 💡 해결 2: 등락률이 정상적으로 표시되도록 수정 */}
               <div
                 style={{
                   ...styles.changeStyle,
-                  color: isUp ? "#ff4d4d" : isDown ? "#4d94ff" : "#333",
+                  color: isUp ? "#ff4d4d" : "#4d94ff",
                 }}
               >
-                {isUp ? "▲" : isDown ? "▼" : "-"} {Math.abs(rate).toFixed(2)}%
+                {isUp ? "▲" : "▼"} {Math.abs(rate).toFixed(2)}%
               </div>
-
-              {/* 💡 해결 3: 거래량(s.volume)이 정상적으로 표시되도록 수정 */}
               <div style={styles.volStyle}>
-                거래량: {parseInt(s.volume || 0).toLocaleString()} 주
+                거래량: {parseInt(s.volume || 0).toLocaleString()}
               </div>
             </div>
           );
@@ -153,66 +172,97 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: "30px",
-    borderBottom: "1px solid #eee",
-    paddingBottom: "15px",
+    marginBottom: "20px",
   },
   logo: { fontSize: "1.5rem", fontWeight: "900", color: "#2c3e50" },
-  filterBar: { display: "flex", gap: "15px", alignItems: "center" },
-  filterLabel: { fontSize: "13px", color: "#7f8c8d", fontWeight: "bold" },
+  filterBar: { display: "flex", gap: "10px" },
   filterBtn: {
     background: "none",
     border: "none",
     cursor: "pointer",
     fontWeight: "bold",
-    fontSize: "14px",
-    padding: "5px",
+    fontSize: "13px",
   },
   buttonGrid: {
     display: "flex",
     gap: "10px",
     flexWrap: "wrap",
-    marginBottom: "30px",
+    marginBottom: "20px",
   },
   condBtn: {
-    padding: "10px 20px",
+    padding: "10px 18px",
     borderRadius: "12px",
     backgroundColor: "#fff",
     cursor: "pointer",
     textAlign: "left",
-    boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.03)",
   },
-  groupText: { fontSize: "11px", color: "#95a5a6" },
-  nameText: { fontSize: "15px", fontWeight: "bold", color: "#34495e" },
-  subTitle: { fontSize: "18px", marginBottom: "20px", color: "#7f8c8d" },
+  groupText: { fontSize: "10px", color: "#95a5a6" },
+  nameText: { fontSize: "14px", fontWeight: "bold", color: "#34495e" },
+  divider: { border: "0.5px solid #eee", margin: "20px 0" },
+  tabContainer: {
+    display: "flex",
+    gap: "8px",
+    marginBottom: "20px",
+    overflowX: "auto",
+    paddingBottom: "5px",
+  },
+  tabBtn: {
+    padding: "6px 14px",
+    borderRadius: "20px",
+    fontSize: "13px",
+    cursor: "pointer",
+    transition: "0.2s",
+    whiteSpace: "nowrap",
+  },
+  subTitle: {
+    fontSize: "16px",
+    marginBottom: "20px",
+    color: "#7f8c8d",
+    fontWeight: "bold",
+  },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-    gap: "20px",
+    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+    gap: "15px",
   },
   card: {
     backgroundColor: "#fff",
     borderRadius: "15px",
-    padding: "20px",
-    boxShadow: "0 4px 15px rgba(0,0,0,0.08)",
-    border: "1px solid #eee",
+    padding: "18px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+    border: "1px solid #f1f1f1",
+    position: "relative",
   },
   cardHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: "15px",
+    marginBottom: "10px",
   },
-  codeLabel: { fontSize: "12px", color: "#bdc3c7", fontWeight: "bold" },
-  stockName: { fontSize: "16px", fontWeight: "900", color: "#2c3e50" },
-  priceStyle: {
-    fontSize: "24px",
+  categoryBadge: {
+    backgroundColor: "#e8f4fd",
+    color: "#3498db",
+    padding: "3px 8px",
+    borderRadius: "5px",
+    fontSize: "10px",
+    fontWeight: "bold",
+  },
+  codeLabel: { fontSize: "11px", color: "#bdc3c7" },
+  stockName: {
+    fontSize: "17px",
     fontWeight: "900",
-    margin: "10px 0",
     color: "#2c3e50",
+    marginBottom: "8px",
   },
-  changeStyle: { fontSize: "16px", fontWeight: "bold", marginBottom: "10px" },
-  volStyle: { fontSize: "13px", color: "#95a5a6" },
+  priceStyle: { fontSize: "22px", fontWeight: "900", color: "#2c3e50" },
+  changeStyle: { fontSize: "15px", fontWeight: "bold", margin: "5px 0 10px 0" },
+  volStyle: {
+    fontSize: "12px",
+    color: "#95a5a6",
+    borderTop: "1px solid #f9f9f9",
+    paddingTop: "8px",
+  },
 };
 
 export default App;
