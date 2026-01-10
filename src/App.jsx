@@ -1,81 +1,90 @@
 import React, { useState, useEffect } from "react";
 
 function App() {
-  const [conditions, setConditions] = useState([]); // 조건식 목록
-  const [stocks, setStocks] = useState([]); // 검색된 종목들
-  const [selectedName, setSelectedName] = useState(""); // 현재 선택된 조건명
+  const [conditions, setConditions] = useState([]);
+  const [stocks, setStocks] = useState([]);
+  const [sentiment, setSentiment] = useState(50);
+  const [selectedName, setSelectedName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("전체");
 
-  const [sortBy, setSortBy] = useState("chrate"); // 정렬 기준
-  const [selectedCategory, setSelectedCategory] = useState("전체"); // 업종 필터
-
-  // 1. 페이지 로드 시 조건 목록 가져오기
   useEffect(() => {
     fetch("http://localhost:4000/condition-list")
       .then((res) => res.json())
-      .then((data) => setConditions(data))
-      .catch((err) => console.error("목록 로드 실패"));
+      .then((data) => setConditions(data));
   }, []);
 
-  // 2. 조건 클릭 시 종목 데이터 요청
   const fetchStocks = async (seq, name) => {
     setLoading(true);
     setSelectedName(name);
-    setSelectedCategory("전체"); // 새로운 조건 클릭 시 필터 초기화
+    setSelectedCategory("전체");
     try {
       const res = await fetch(`http://localhost:4000/condition-stocks/${seq}`);
       const data = await res.json();
-      setStocks(data);
+      setStocks(data.stocks || []);
+      setSentiment(data.sentiment || 50);
     } catch (e) {
-      console.error("종목 로드 실패");
+      console.error(e);
     }
     setLoading(false);
   };
 
-  // 3. 업종 리스트 추출 (데이터에서 중복 제거하여 자동 생성)
-  const rawCategories = [...new Set(stocks.map((s) => s.category))];
+  // 💡 [해결] 탭 정렬 로직을 return문 밖으로 뺐습니다.
+  const rawCategories = [...new Set(stocks.map((s) => s.category || "기타"))];
   const categories = [
     "전체",
-    ...rawCategories.filter((c) => c !== "전체").sort(),
+    ...rawCategories.filter((c) => c !== "전체" && c !== "기타").sort(),
+    "기타",
   ];
 
-  // 필터링 및 정렬
-  const processedStocks = stocks
+  const filteredStocks = stocks
     .filter(
       (s) => selectedCategory === "전체" || s.category === selectedCategory
     )
-    .sort((a, b) => {
-      if (sortBy === "chrate")
-        return parseFloat(b.chrate) - parseFloat(a.chrate);
-      return 0; // 등락률순 기본 정렬
-    });
+    .sort((a, b) => parseFloat(b.chrate) - parseFloat(a.chrate));
+
+  const getSInfo = (s) => {
+    if (s > 70) return { label: "Greed", color: "#2ecc71" };
+    if (s < 30) return { label: "Fear", color: "#e74c3c" };
+    return { label: "Neutral", color: "#f1c40f" };
+  };
 
   return (
     <div style={styles.container}>
-      <header style={styles.header}>
-        <h1 style={styles.logo}>🛡️ REAL-TIME WATCHER</h1>
-        <div style={styles.filterBar}>
-          <span style={styles.filterLabel}>정렬:</span>
-          {["name", "chrate", "volume"].map((type) => (
-            <button
-              key={type}
-              onClick={() => setSortBy(type)}
-              style={{
-                ...styles.filterBtn,
-                color: sortBy === type ? "#3498db" : "#95a5a6",
-              }}
-            >
-              {type === "name"
-                ? "이름순"
-                : type === "chrate"
-                ? "등락률순"
-                : "거래량순"}
-            </button>
-          ))}
-        </div>
+      <header style={{ textAlign: "center", marginBottom: "30px" }}>
+        <h1 style={{ fontSize: "2rem", fontWeight: "900", color: "#2c3e50" }}>
+          🛡️ STOCK WATCHER
+        </h1>
       </header>
 
-      {/* 조건식 버튼 목록 */}
+      {selectedName && (
+        <div style={styles.sentimentCard}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginBottom: "10px",
+            }}
+          >
+            <span style={{ fontWeight: "bold" }}>Market Sentiment Index</span>
+            <span
+              style={{ color: getSInfo(sentiment).color, fontWeight: "bold" }}
+            >
+              {getSInfo(sentiment).label}
+            </span>
+          </div>
+          <div style={styles.gaugeOuter}>
+            <div
+              style={{
+                ...styles.gaugeInner,
+                width: `${sentiment}%`,
+                backgroundColor: getSInfo(sentiment).color,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       <div style={styles.buttonGrid}>
         {conditions.map((c) => (
           <button
@@ -85,77 +94,57 @@ function App() {
               ...styles.condBtn,
               border:
                 selectedName === c.name
-                  ? "2px solid #3498db"
+                  ? "2px solid #2c3e50"
                   : "1px solid #ddd",
             }}
           >
-            <div style={styles.groupText}>{c.group}</div>
-            <div style={styles.nameText}>{c.name}</div>
+            {c.name}
           </button>
         ))}
       </div>
 
-      <hr style={styles.divider} />
-
-      {/* 💡 업종별 탭 메뉴 */}
-      {stocks.length > 0 && (
-        <div style={styles.tabContainer}>
-          {categories.map((cat) => (
+      {/* 💡 탭 렌더링 부분: 이미 밖에서 계산된 categories를 사용합니다. */}
+      <div style={styles.tabContainer}>
+        {stocks.length > 0 &&
+          categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
               style={{
                 ...styles.tabBtn,
-                backgroundColor:
-                  selectedCategory === cat ? "#3498db" : "transparent",
+                backgroundColor: selectedCategory === cat ? "#2c3e50" : "#fff",
                 color: selectedCategory === cat ? "#fff" : "#7f8c8d",
-                border:
-                  selectedCategory === cat
-                    ? "1px solid #3498db"
-                    : "1px solid #ddd",
               }}
             >
               {cat}
             </button>
           ))}
-        </div>
-      )}
+      </div>
 
-      <h2 style={styles.subTitle}>
-        {selectedName
-          ? `🎯 ${selectedName} (${processedStocks.length}개)`
-          : "조건을 선택해주세요"}
-      </h2>
-
-      {/* 종목 카드 그리드 */}
       <div style={styles.grid}>
-        {processedStocks.map((s, idx) => {
-          const rate = parseFloat(s.chrate || 0);
-          const isUp = rate > 0;
-          return (
-            <div key={idx} style={styles.card}>
-              <div style={styles.cardHeader}>
-                <span style={styles.categoryBadge}>{s.category || "기타"}</span>
-                <span style={styles.codeLabel}>{s.code}</span>
-              </div>
-              <div style={styles.stockName}>{s.name}</div>
-              <div style={styles.priceStyle}>
-                {parseInt(s.price || 0).toLocaleString()}원
-              </div>
-              <div
-                style={{
-                  ...styles.changeStyle,
-                  color: isUp ? "#ff4d4d" : "#4d94ff",
-                }}
-              >
-                {isUp ? "▲" : "▼"} {Math.abs(rate).toFixed(2)}%
-              </div>
-              <div style={styles.volStyle}>
-                거래량: {parseInt(s.volume || 0).toLocaleString()}
-              </div>
+        {filteredStocks.map((s, i) => (
+          <div key={i} style={styles.card}>
+            <div style={styles.categoryBadge}>{s.category}</div>
+            <div
+              style={{ fontSize: "18px", fontWeight: "bold", margin: "10px 0" }}
+            >
+              {s.name}
             </div>
-          );
-        })}
+            <div style={{ fontSize: "22px", fontWeight: "900" }}>
+              {parseInt(s.price).toLocaleString()}원
+            </div>
+            <div
+              style={{
+                color: parseFloat(s.chrate) > 0 ? "#e74c3c" : "#3498db",
+                fontWeight: "bold",
+                marginTop: "5px",
+              }}
+            >
+              {parseFloat(s.chrate) > 0 ? "▲" : "▼"}{" "}
+              {Math.abs(s.chrate).toFixed(2)}%
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -163,106 +152,66 @@ function App() {
 
 const styles = {
   container: {
-    padding: "30px",
+    padding: "40px",
     backgroundColor: "#f8f9fa",
     minHeight: "100vh",
-    fontFamily: "Pretendard, sans-serif",
+    fontFamily: "sans-serif",
   },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "20px",
+  sentimentCard: {
+    backgroundColor: "#fff",
+    padding: "20px",
+    borderRadius: "15px",
+    marginBottom: "25px",
+    boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
   },
-  logo: { fontSize: "1.5rem", fontWeight: "900", color: "#2c3e50" },
-  filterBar: { display: "flex", gap: "10px" },
-  filterBtn: {
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    fontWeight: "bold",
-    fontSize: "13px",
+  gaugeOuter: {
+    width: "100%",
+    height: "12px",
+    backgroundColor: "#eee",
+    borderRadius: "6px",
+    overflow: "hidden",
   },
+  gaugeInner: { height: "100%", transition: "0.5s ease" },
   buttonGrid: {
     display: "flex",
     gap: "10px",
     flexWrap: "wrap",
-    marginBottom: "20px",
+    marginBottom: "25px",
+    justifyContent: "center",
   },
   condBtn: {
-    padding: "10px 18px",
-    borderRadius: "12px",
+    padding: "10px 20px",
+    borderRadius: "20px",
     backgroundColor: "#fff",
     cursor: "pointer",
-    textAlign: "left",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.03)",
+    fontWeight: "bold",
   },
-  groupText: { fontSize: "10px", color: "#95a5a6" },
-  nameText: { fontSize: "14px", fontWeight: "bold", color: "#34495e" },
-  divider: { border: "0.5px solid #eee", margin: "20px 0" },
   tabContainer: {
     display: "flex",
     gap: "8px",
     marginBottom: "20px",
     overflowX: "auto",
-    paddingBottom: "5px",
   },
   tabBtn: {
-    padding: "6px 14px",
-    borderRadius: "20px",
-    fontSize: "13px",
+    padding: "6px 15px",
+    borderRadius: "10px",
+    fontSize: "12px",
     cursor: "pointer",
-    transition: "0.2s",
+    border: "1px solid #ddd",
     whiteSpace: "nowrap",
-  },
-  subTitle: {
-    fontSize: "16px",
-    marginBottom: "20px",
-    color: "#7f8c8d",
-    fontWeight: "bold",
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-    gap: "15px",
+    gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+    gap: "20px",
   },
   card: {
     backgroundColor: "#fff",
+    padding: "20px",
     borderRadius: "15px",
-    padding: "18px",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
-    border: "1px solid #f1f1f1",
-    position: "relative",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
   },
-  cardHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "10px",
-  },
-  categoryBadge: {
-    backgroundColor: "#e8f4fd",
-    color: "#3498db",
-    padding: "3px 8px",
-    borderRadius: "5px",
-    fontSize: "10px",
-    fontWeight: "bold",
-  },
-  codeLabel: { fontSize: "11px", color: "#bdc3c7" },
-  stockName: {
-    fontSize: "17px",
-    fontWeight: "900",
-    color: "#2c3e50",
-    marginBottom: "8px",
-  },
-  priceStyle: { fontSize: "22px", fontWeight: "900", color: "#2c3e50" },
-  changeStyle: { fontSize: "15px", fontWeight: "bold", margin: "5px 0 10px 0" },
-  volStyle: {
-    fontSize: "12px",
-    color: "#95a5a6",
-    borderTop: "1px solid #f9f9f9",
-    paddingTop: "8px",
-  },
+  categoryBadge: { fontSize: "10px", color: "#3498db", fontWeight: "bold" },
 };
 
 export default App;

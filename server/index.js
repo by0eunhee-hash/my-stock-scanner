@@ -18,7 +18,7 @@ const getAccessToken = async () => {
       appsecret: KIS_SECRET,
     });
     accessToken = res.data.access_token;
-    console.log("✅ [KIS] 인증 성공 - 7개 조건식 엔진 대기 중");
+    console.log("✅ [KIS] 인증 성공 - 포트폴리오 모드 가동");
   } catch (e) {
     console.error("❌ [KIS] 인증 실패");
   }
@@ -70,36 +70,21 @@ app.get("/condition-stocks/:seq", async (req, res) => {
     );
 
     const rawStocks = response.data.output2 || [];
+
+    // 💡 공포-탐욕 지수 산출 (상승 종목 비율 기반)
+    const upStocks = rawStocks.filter((s) => parseFloat(s.chgrate) > 0).length;
+    const upRatio = (upStocks / (rawStocks.length || 1)) * 100;
+    let score = Math.round(upRatio); // 단순 가독성을 위해 상승 비율을 점수화
+    score = Math.max(5, Math.min(95, score));
+
     const result = rawStocks.map((s) => {
       let category = "기타";
       const name = s.name;
-
-      // 💡 '기타'를 죽이는 강력한 정규표현식 분류기
-      if (
-        /전자|하이닉스|반도체|테크|칩스|솔루션|디스플레이|시스템|회로|공정/.test(
-          name
-        )
-      )
-        category = "IT/반도체";
-      else if (
-        /에너지|에코프로|배터리|셀|리튬|화학|신소재|전기차|충전|전선/.test(name)
-      )
-        category = "2차전지/에너지";
-      else if (/현대|기아|모빌리티|부품|타이어|자동차|오토|엔진/.test(name))
-        category = "자동차/모빌리티";
-      else if (/바이오|제약|셀트리온|헬스|메디|의약|생명|유전|백신/.test(name))
-        category = "바이오/제약";
-      else if (/금융|은행|지주|증권|보험|카드|투자|자산/.test(name))
-        category = "금융/증권";
-      else if (
-        /엔터|게임|네이버|카카오|콘텐츠|소프트|AI|로봇|클라우드|통신/.test(name)
-      )
-        category = "플랫폼/엔터/AI";
-      else if (
-        /건설|중공업|조선|철강|엔지니어링|기계|금속|시멘트|플랜트/.test(name)
-      )
-        category = "인프라/제조";
-      else if (/홀딩스|우|스팩|그룹/.test(name)) category = "지주/기타";
+      // 💡 업종 분류 필터링
+      if (/전자|하이닉스|반도체|테크|칩스/.test(name)) category = "IT/반도체";
+      else if (/에너지|에코프로|배터리|리튬/.test(name)) category = "2차전지";
+      else if (/현대|기아|차/.test(name)) category = "자동차";
+      else if (/바이오|제약|셀트리온/.test(name)) category = "바이오";
 
       return {
         code: s.code,
@@ -110,9 +95,10 @@ app.get("/condition-stocks/:seq", async (req, res) => {
         category: category,
       };
     });
-    res.json(result);
+
+    res.json({ stocks: result, sentiment: score });
   } catch (e) {
-    res.status(500).json([]);
+    res.status(500).json({ stocks: [], sentiment: 50 });
   }
 });
 
