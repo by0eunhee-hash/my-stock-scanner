@@ -2,14 +2,13 @@ require("dotenv").config();
 const axios = require("axios");
 const express = require("express");
 const cors = require("cors");
-const { GoogleGenAI } = require("@google/genai");
+const { handleGeminiRequest } = require("./modules/gemini");
 
 const app = express();
 app.use(cors());
 app.use(express.json()); // 💡 JSON 파싱을 위해 꼭 필요합니다!
 
-const { KIS_APPKEY, KIS_SECRET, KIS_URL, KIS_USERID, GEMINI_API_KEY } =
-  process.env;
+const { KIS_APPKEY, KIS_SECRET, KIS_URL, KIS_USERID } = process.env;
 let accessToken = "";
 
 const getAccessToken = async () => {
@@ -100,27 +99,7 @@ app.get("/condition-stocks/:seq", async (req, res) => {
   }
 });
 
-app.post("/gemini", async (req, res) => {
-  try {
-    const { prompt } = req.body;
-    if (!prompt) {
-      return res.status(400).json({ error: "Prompt is required" });
-    }
-
-    const response = await genAI.models.generateContent({
-      // model: "gemini-3-flash-preview",
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
-    const text = response.text;
-    console.log(text);
-
-    res.json({ response: text });
-  } catch (e) {
-    console.error("❌ [Gemini] 호출 실패", e);
-    res.status(500).json({ error: "Failed to generate response" });
-  }
-});
+app.post("/gemini", handleGeminiRequest);
 
 app.listen(4000, async () => {
   await getAccessToken();
