@@ -1,0 +1,37 @@
+GET http://localhost:3000/posts
+
+###
+
+GET http://localhost:3000/posts/1
+
+###
+
+POST http://localhost:3000/posts
+Content-Type: application/json
+
+{
+  "title": "New Post",
+  "content": "This is the content of the new post."
+}
+
+###
+
+PATCH http://localhost:3000/posts/1
+Content-Type: application/json
+
+{
+  "title": "Updated Post Title"
+}
+
+###
+
+DELETE http://localhost:3000/posts/1
+
+###
+
+POST http://localhost:4000/gemini
+Content-Type: application/json
+
+{
+  "prompt": "오늘 날씨 알려줘"
+}
