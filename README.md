@@ -22,6 +22,11 @@
 - API: 한국투자증권 OpenAPI, Gemini API
 - Library: Axios, dotenv, cors
 
+## 화면 미리보기
+
+### 메인 대시보드
+![메인 대시보드](docs/images/main-dashboard.png)
+
 ## 개발 과정에서 해결한 문제
 
 한국투자증권 API 연동 과정에서 기존 예제와 실제 API 요청 방식이 달라 정상적으로 데이터가 조회되지 않는 문제가 있었습니다. 공식 문서를 확인해 인증 요청과 조건검색 API 호출 방식을 수정했고, 환경변수를 통해 API Key와 Secret을 분리하여 관리했습니다.
