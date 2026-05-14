@@ -25,7 +25,8 @@
 ## 화면 미리보기
 
 ### 메인 대시보드
-![메인 대시보드](docs/images/main-dashboard.png)
+<img width="1588" height="1043" alt="main-dashboard" src="https://github.com/user-attachments/assets/e771253d-7624-4989-a68d-537869a753df" />
+
 
 ## 개발 과정에서 해결한 문제
 
